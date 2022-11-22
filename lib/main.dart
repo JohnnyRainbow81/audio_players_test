@@ -77,7 +77,7 @@ class PlayButton extends StatefulWidget {
 }
 
 class _PlayButtonState extends State<PlayButton> {
-  PlayerState? stateStream;
+  PlayerState? state;
   StreamSubscription<PlayerState>? subscription;
   late AudioData audioData;
 
@@ -90,7 +90,7 @@ class _PlayButtonState extends State<PlayButton> {
   Future<void> init() async {
     audioData = await AudioService.instance.prepareAudio(widget.id);
     subscription = audioData.stateStream?.listen((event) {
-      stateStream = event;
+      state = event;
       setState(() {});
     });
   }
@@ -102,7 +102,7 @@ class _PlayButtonState extends State<PlayButton> {
   }
 
   void togglePlay() {
-    switch (stateStream) {
+    switch (state) {
       case PlayerState.stopped:
       case PlayerState.completed:
       case PlayerState.paused:
@@ -119,7 +119,7 @@ class _PlayButtonState extends State<PlayButton> {
   }
 
   IconData _getIcon() {
-    switch (stateStream) {
+    switch (state) {
       case PlayerState.stopped:
       case PlayerState.completed:
       case PlayerState.paused:
