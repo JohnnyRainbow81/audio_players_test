@@ -1,10 +1,28 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
+void initializeOSDependentAudio() {
+  final AudioContext audioContext = AudioContext(
+    iOS: AudioContextIOS(
+      defaultToSpeaker: true,
+      category: AVAudioSessionCategory.ambient,
+      options: [AVAudioSessionOptions.defaultToSpeaker, AVAudioSessionOptions.duckOthers],
+    ),
+    android: AudioContextAndroid(
+      isSpeakerphoneOn: true,
+      stayAwake: true,
+      contentType: AndroidContentType.speech,
+      usageType: AndroidUsageType.media,
+      audioFocus: AndroidAudioFocus.gainTransientExclusive,
+    ),
+  );
+
+  AudioPlayer.global.setGlobalAudioContext(audioContext);
+
+  AudioPlayer.global.changeLogLevel(LogLevel.info);
+}
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   initializeOSDependentAudio();
@@ -35,7 +53,6 @@ class AudioApp extends StatefulWidget {
 }
 
 class _AudioAppState extends State<AudioApp> {
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -60,7 +77,7 @@ class PlayButton extends StatefulWidget {
 }
 
 class _PlayButtonState extends State<PlayButton> {
-  PlayerState? state;
+  PlayerState? stateStream;
   StreamSubscription<PlayerState>? subscription;
   late AudioData audioData;
 
@@ -72,8 +89,8 @@ class _PlayButtonState extends State<PlayButton> {
 
   Future<void> init() async {
     audioData = await AudioService.instance.prepareAudio(widget.id);
-    subscription = audioData.state?.listen((event) {
-      state = event;
+    subscription = audioData.stateStream?.listen((event) {
+      stateStream = event;
       setState(() {});
     });
   }
@@ -85,7 +102,7 @@ class _PlayButtonState extends State<PlayButton> {
   }
 
   void togglePlay() {
-    switch (state) {
+    switch (stateStream) {
       case PlayerState.stopped:
       case PlayerState.completed:
       case PlayerState.paused:
@@ -98,11 +115,11 @@ class _PlayButtonState extends State<PlayButton> {
         AudioService.instance.play(widget.id);
     }
 
-  //  setState(() {});
+    //  setState(() {});
   }
 
   IconData _getIcon() {
-    switch (state) {
+    switch (stateStream) {
       case PlayerState.stopped:
       case PlayerState.completed:
       case PlayerState.paused:
@@ -120,27 +137,7 @@ class _PlayButtonState extends State<PlayButton> {
   }
 }
 
-// Just some OS setup
-void initializeOSDependentAudio() {
-  final AudioContext audioContext = AudioContext(
-    iOS: AudioContextIOS(
-      defaultToSpeaker: true,
-      category: AVAudioSessionCategory.ambient,
-      options: [AVAudioSessionOptions.defaultToSpeaker, AVAudioSessionOptions.duckOthers],
-    ),
-    android: AudioContextAndroid(
-      isSpeakerphoneOn: true,
-      stayAwake: true,
-      contentType: AndroidContentType.speech,
-      usageType: AndroidUsageType.media,
-      audioFocus: AndroidAudioFocus.gainTransientExclusive,
-    ),
-  );
 
-  AudioPlayer.global.setGlobalAudioContext(audioContext);
-
-  AudioPlayer.global.changeLogLevel(LogLevel.info);
-}
 
 class AudioService {
   AudioService._();
@@ -167,7 +164,7 @@ class AudioService {
 
     AudioData audioData = AudioData.empty();
     audioData.audioId = id;
-    audioData.state = audioPlayer.onPlayerStateChanged;
+    audioData.stateStream = audioPlayer.onPlayerStateChanged;
 
     _audioPlayers.putIfAbsent(id, () => audioPlayer);
     _audioDatas.putIfAbsent(id, () => audioData);
@@ -177,7 +174,7 @@ class AudioService {
 
   Future<void> play(String id) async {
     String path = (await DefaultCacheManager().getSingleFile(_url(id))).path;
-    await _audioPlayers[id]?.play(DeviceFileSource(path), volume: 1);
+    await _audioPlayers[id]?.play(DeviceFileSource(path));
   }
 
   Future<void> pause(String id) async {
@@ -195,10 +192,10 @@ class AudioService {
 
 class AudioData {
   String audioId = "";
-  Stream<PlayerState>? state;
+  Stream<PlayerState>? stateStream;
 
   AudioData({
-    this.state,
+    this.stateStream,
   });
 
   AudioData.empty();
